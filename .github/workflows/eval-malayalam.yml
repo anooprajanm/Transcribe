@@ -1,0 +1,54 @@
+name: Malayalam model evaluation
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - scripts/eval_malayalam.py
+      - .github/workflows/eval-malayalam.yml
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install sherpa-onnx (same version as the app)
+        run: pip install sherpa-onnx==1.13.8 numpy
+
+      - name: Download models and test audio
+        run: |
+          set -x
+          W=$RUNNER_TEMP/eval; mkdir -p $W/models $W/fleurs $W/extra
+          GH=https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models
+          HF=https://huggingface.co
+          get() { curl -fsSL --retry 3 -o "$2" "$1" || echo "::warning::download failed: $1"; }
+
+          mkdir -p $W/models/omni300
+          curl -fsSL $GH/sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-v2-int8-2026-02-05.tar.bz2 \
+            | tar xj -C $W/models/omni300 --strip-components=1 --wildcards '*/model.int8.onnx' '*/tokens.txt'
+
+          mkdir -p $W/models/omni1b
+          R=$HF/csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05/resolve/main
+          get $R/model.int8.onnx $W/models/omni1b/model.int8.onnx; get $R/tokens.txt $W/models/omni1b/tokens.txt
+
+          mkdir -p $W/models/indic_csn
+          R=$HF/csndhanasekar/sherpa-onnx-indicconformer-ml-int8/resolve/main
+          get $R/model.int8.onnx $W/models/indic_csn/model.int8.onnx; get $R/tokens.txt $W/models/indic_csn/tokens.txt
+
+          mkdir -p $W/models/indic_jj
+          R=$HF/jeswinjestin/sherpa-onnx-nemo-ctc-indicconformer-malayalam/resolve/main
+          get $R/model.onnx $W/models/indic_jj/model.onnx; get $R/tokens.txt $W/models/indic_jj/tokens.txt
+          get $R/test_wavs/0.wav $W/extra/0.wav
+
+          R=$HF/datasets/google/fleurs/resolve/main/data/ml_in
+          get $R/test.tsv $W/fleurs/test.tsv; get $R/audio/test.tar.gz $W/fleurs/test.tar.gz
+          du -sh $W/models/* $W/fleurs/* 2>/dev/null || true
+          echo "W=$W" >> $GITHUB_ENV
+
+      - name: Evaluate
+        run: python scripts/eval_malayalam.py "$W"
