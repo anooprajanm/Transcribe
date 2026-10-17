@@ -109,7 +109,7 @@ object ModelCatalog {
     // Community sherpa-onnx export, pinned by checksum. In CI it scored 3.0% CER on FLEURS
     // Malayalam vs 5.2% for Omnilingual 300M and ran 2.5x faster (scripts/eval_malayalam.py).
     private const val INDIC_ML_REPO =
-        "https://huggingface.co/csndhanasekar/sherpa-onnx-indicconformer-ml-int8/resolve/main"
+        "https://huggingface.co/csndhanasekar/sherpa-onnx-indicconformer-ml-int8/resolve/394e2c20b57eb0db12839ecff00f904a55ea9f47"
 
     val INDIC_ML = ModelSpec(
         id = "indicconformer-ml",
@@ -118,8 +118,14 @@ object ModelCatalog {
         diskMb = 135,
         isArchive = false,
         files = listOf(
-            RemoteFile("$INDIC_ML_REPO/model.int8.onnx", "model.int8.onnx"),
-            RemoteFile("$INDIC_ML_REPO/tokens.txt", "tokens.txt"),
+            RemoteFile(
+                "$INDIC_ML_REPO/model.int8.onnx", "model.int8.onnx",
+                "357382eb9ad4ef45c9269042af953e627ec9ca66a396cad1a2f4ed8562c012a1",
+            ),
+            RemoteFile(
+                "$INDIC_ML_REPO/tokens.txt", "tokens.txt",
+                "60eb97740574a55504786d4ac0699b14280977ec346a7d9a9bbef4deeb1e559b",
+            ),
         ),
         engine = Engine.NEMO_CTC,
     )

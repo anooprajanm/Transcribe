@@ -10,10 +10,10 @@ including meetings that switch between the two.
 |---|---|
 | Record | 16 kHz mono WAV, foreground service (screen can be off) |
 | Who spoke when | sherpa-onnx speaker diarization: pyannote segmentation 3.0 + 3D-Speaker embeddings |
-| Speech to text | Per speaker turn. **Hybrid mode:** Whisper detects the turn's language; English stays with Whisper, Malayalam/mixed turns go to Meta Omnilingual ASR 300M |
+| Speech to text | Per speaker turn. **Hybrid mode:** Omnilingual ASR 300M decides Malayalam vs English from the script it writes; Malayalam turns are transcribed by AI4Bharat IndicConformer, English turns by Whisper |
 | Action items | On-device LLM via MediaPipe (Gemma `.task` file you import once) |
 
-Nothing is uploaded. Internet is used only once, to download the speech models (~750 MB on
+Nothing is uploaded. Internet is used only once, to download the speech models (~900 MB on
 disk with the defaults).
 
 ## Install
@@ -25,6 +25,19 @@ disk with the defaults).
    int4, or Gemma 3n E2B for better Malayalam understanding, from the `litert-community`
    organisation on Hugging Face; requires accepting the Gemma licence), then Settings →
    **Import .task model**.
+
+## Choosing the Malayalam model
+
+`scripts/eval_malayalam.py` (run by the *Malayalam model evaluation* workflow) compares the
+candidates on 40 FLEURS Malayalam test utterances with the same sherpa-onnx version as the app:
+
+| Model | CER | Relative speed |
+|---|---|---|
+| IndicConformer Malayalam int8 (default) | 3.0% | 2.5x faster than Omnilingual 300M |
+| Omnilingual 1B v2 | 4.2% | 2.4x slower |
+| Omnilingual 300M v2 | 5.2% | baseline |
+
+FLEURS is read speech; conversational office audio will score worse for all models.
 
 ## Usage tips
 
