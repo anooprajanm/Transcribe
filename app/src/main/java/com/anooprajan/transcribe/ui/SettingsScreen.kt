@@ -197,6 +197,16 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
             }
 
+            item { Header("Troubleshooting") }
+            item {
+                Text(
+                    "If transcription crashes, share this file with the developer. It contains the app log and " +
+                        "device details, no audio or transcripts.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                ShareDiagnosticsButton()
+            }
+
             item { Header("Action items (on-device LLM)") }
             item {
                 Card(Modifier.fillMaxWidth()) {

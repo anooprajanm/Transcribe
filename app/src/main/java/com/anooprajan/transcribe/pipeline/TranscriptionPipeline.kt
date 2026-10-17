@@ -109,13 +109,23 @@ class TranscriptionPipeline(
         )
         val sd = OfflineSpeakerDiarization(config = config)
         try {
-            val segments = sd.processWithCallback(samples, { done, total, _ ->
-                if (total > 0) progress.report("Identifying speakers", done.toFloat() / total)
-                0
-            })
+            val segments = sd.processWithCallback(samples, DiarizationCallback(progress))
             return segments.map { Turn(it.start, it.end, it.speaker) }
         } finally {
             sd.release()
+        }
+    }
+
+    /**
+     * Must be a named class, not a lambda: the JNI layer looks up
+     * `invoke(IIJ)Ljava/lang/Integer;`, which Kotlin 2 lambdas (compiled via invokedynamic)
+     * do not have. A missing method leaves a pending JNI exception that aborts the process.
+     */
+    private class DiarizationCallback(private val progress: Progress) : (Int, Int, Long) -> Int {
+        override fun invoke(done: Int, total: Int, arg: Long): Int {
+            // An exception escaping into native code would also abort the process.
+            runCatching { if (total > 0) progress.report("Identifying speakers", done.toFloat() / total) }
+            return 0
         }
     }
 

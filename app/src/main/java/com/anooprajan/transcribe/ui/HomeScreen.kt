@@ -37,12 +37,16 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.anooprajan.transcribe.Diagnostics
 import com.anooprajan.transcribe.audio.RecorderService
 import com.anooprajan.transcribe.audio.RecorderState
 import com.anooprajan.transcribe.data.Recording
@@ -55,6 +59,9 @@ import com.anooprajan.transcribe.pipeline.TranscriptFormatter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,6 +70,8 @@ fun HomeScreen(onOpen: (String) -> Unit, onSettings: () -> Unit) {
     val recordings by Recordings.get(context).all.collectAsState()
     val live by RecorderState.live.collectAsState()
     val jobs by ProcessingState.jobs.collectAsState()
+
+    var crash by remember { mutableStateOf(Diagnostics.unseenCrash(context)) }
 
     val missingModels = remember(jobs) {
         val models = ModelManager(context)
@@ -126,6 +135,23 @@ fun HomeScreen(onOpen: (String) -> Unit, onSettings: () -> Unit) {
                                 "Keep the phone in the middle of the table. Screen can be off.",
                                 style = MaterialTheme.typography.bodySmall,
                             )
+                        }
+                    }
+                }
+            }
+            crash?.let { description ->
+                item {
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text("The app stopped unexpectedly last time", style = MaterialTheme.typography.titleMedium)
+                            Text(description, style = MaterialTheme.typography.bodySmall)
+                            Row {
+                                ShareDiagnosticsButton()
+                                TextButton(onClick = {
+                                    Diagnostics.dismissCrash(context)
+                                    crash = null
+                                }) { Text("Dismiss") }
+                            }
                         }
                     }
                 }
@@ -208,4 +234,19 @@ fun statusColor(s: Status) = when (s) {
     Status.DONE -> MaterialTheme.colorScheme.primary
     Status.ERROR -> MaterialTheme.colorScheme.error
     else -> MaterialTheme.colorScheme.onSurfaceVariant
+}
+
+@Composable
+fun ShareDiagnosticsButton() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    TextButton(enabled = !busy, onClick = {
+        busy = true
+        scope.launch {
+            val intent = withContext(Dispatchers.IO) { runCatching { Diagnostics.shareIntent(context) }.getOrNull() }
+            busy = false
+            intent?.let { context.startActivity(it) }
+        }
+    }) { Text(if (busy) "Collecting…" else "Share diagnostics") }
 }
