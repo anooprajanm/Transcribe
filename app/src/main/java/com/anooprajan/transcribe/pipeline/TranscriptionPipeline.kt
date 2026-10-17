@@ -47,10 +47,15 @@ class TranscriptionPipeline(
         progress.report("Identifying speakers", 0f)
         val turns = diarize(samples, threads, progress).let {
             if (it.isEmpty()) Segmenter.windows(totalSec) else Segmenter.build(it)
-        }
+        }.let(Segmenter::renumberSpeakers)
 
         val mode = settings.asrMode
-        val whisper = if (mode != AsrMode.OMNILINGUAL) createWhisper(threads) else null
+        // Hybrid only sends non-Malayalam turns to Whisper, so pin it to English there.
+        val whisper = if (mode != AsrMode.OMNILINGUAL) {
+            createWhisper(threads, language = if (mode == AsrMode.HYBRID) "en" else "")
+        } else {
+            null
+        }
         val omni = if (mode != AsrMode.WHISPER) createOmnilingual(threads) else null
         try {
             val out = ArrayList<TranscriptSegment>(turns.size)
@@ -66,14 +71,16 @@ class TranscriptionPipeline(
                         TranscriptSegment(turn.start, turn.end, turn.speaker, r.lang, "whisper", r.text)
                     }
                     AsrMode.HYBRID -> {
-                        val r = decode(whisper!!, chunk)
-                        if (r.lang == "en") {
-                            TranscriptSegment(turn.start, turn.end, turn.speaker, "en", "whisper", r.text)
+                        // Omnilingual writes each language in its own script, so the script of its
+                        // output is a more reliable Malayalam/English router than Whisper's language
+                        // ID, which often tags Malayalam as Urdu/Tamil or as English (and then
+                        // "transcribes" it as an invented English sentence).
+                        val o = decode(omni!!, chunk)
+                        if (malayalamRatio(o.text) >= 0.4f) {
+                            TranscriptSegment(turn.start, turn.end, turn.speaker, "ml", "omnilingual", o.text)
                         } else {
-                            TranscriptSegment(
-                                turn.start, turn.end, turn.speaker, r.lang.ifEmpty { "ml" },
-                                "omnilingual", decode(omni!!, chunk).text,
-                            )
+                            val w = decode(whisper!!, chunk)
+                            TranscriptSegment(turn.start, turn.end, turn.speaker, "en", "whisper", w.text)
                         }
                     }
                 }
@@ -129,7 +136,7 @@ class TranscriptionPipeline(
         }
     }
 
-    private fun createWhisper(threads: Int): OfflineRecognizer {
+    private fun createWhisper(threads: Int, language: String): OfflineRecognizer {
         val files = ModelCatalog.whisperFiles(models.dir(settings.whisperModel))
         return OfflineRecognizer(
             config = OfflineRecognizerConfig(
@@ -138,7 +145,7 @@ class TranscriptionPipeline(
                     whisper = OfflineWhisperModelConfig(
                         encoder = files.encoder,
                         decoder = files.decoder,
-                        language = "", // empty = detect per call
+                        language = language, // empty = detect per call
                         task = "transcribe",
                     ),
                     tokens = files.tokens,
@@ -188,6 +195,16 @@ class TranscriptionPipeline(
     companion object {
         /** Whisper reports languages as "<|en|>" in some builds and "en" in others. */
         internal fun normalizeLang(lang: String) = lang.trim().removePrefix("<|").removeSuffix("|>").lowercase()
+
+        /** Share of letters that are Malayalam script (U+0D00–U+0D7F). */
+        internal fun malayalamRatio(text: String): Float {
+            var letters = 0
+            var ml = 0
+            for (c in text) {
+                if (c in '\u0D00'..'\u0D7F') { ml++; letters++ } else if (c.isLetter()) letters++
+            }
+            return if (letters == 0) 0f else ml.toFloat() / letters
+        }
 
         /** Collapses Whisper's occasional repetition loops ("ok ok ok ok ok ..."). */
         internal fun cleanText(text: String): String {

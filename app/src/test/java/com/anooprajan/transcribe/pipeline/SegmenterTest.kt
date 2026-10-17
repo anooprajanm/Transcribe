@@ -44,4 +44,17 @@ class SegmenterTest {
         assertEquals(3, out.size)
         assertEquals(60f, out.last().end)
     }
+
+    @Test
+    fun speakersNumberedByFirstAppearance() {
+        val out = Segmenter.renumberSpeakers(listOf(Turn(0f, 1f, 3), Turn(1f, 2f, 1), Turn(2f, 3f, 3)))
+        assertEquals(listOf(0, 1, 0), out.map { it.speaker })
+    }
+
+    @Test
+    fun malayalamRatioDetectsScript() {
+        assertEquals(1f, TranscriptionPipeline.malayalamRatio("എനിക്ക് ഞായറാഴ്ച"), 0.01f)
+        assertEquals(0f, TranscriptionPipeline.malayalamRatio("I need to buy milk"), 0.01f)
+        assertTrue(TranscriptionPipeline.malayalamRatio("meeting നാളെ ആണ്") > 0.4f)
+    }
 }

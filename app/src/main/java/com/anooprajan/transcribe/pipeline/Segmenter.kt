@@ -32,6 +32,12 @@ object Segmenter {
         return merged.flatMap { split(it, maxLen) }.filter { it.duration >= minLen }
     }
 
+    /** Diarization cluster ids are arbitrary; number speakers in order of first appearance. */
+    fun renumberSpeakers(turns: List<Turn>): List<Turn> {
+        val ids = HashMap<Int, Int>()
+        return turns.map { t -> t.copy(speaker = ids.getOrPut(t.speaker) { ids.size }) }
+    }
+
     /** Fixed windows for one speaker; used when diarization finds nothing. */
     fun windows(totalSec: Float, maxLen: Float = 28f): List<Turn> =
         if (totalSec <= 0f) emptyList() else split(Turn(0f, totalSec, 0), maxLen)

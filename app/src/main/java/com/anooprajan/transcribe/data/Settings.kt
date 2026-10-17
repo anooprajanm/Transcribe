@@ -8,8 +8,8 @@ import com.anooprajan.transcribe.models.ModelSpec
 enum class AsrMode(val title: String, val description: String) {
     HYBRID(
         "Hybrid (recommended)",
-        "Whisper detects the language of each turn. English turns stay with Whisper, " +
-            "Malayalam / mixed turns go to Omnilingual ASR, which is far stronger on Malayalam.",
+        "Each turn goes through Omnilingual ASR first. Turns that come out in Malayalam script " +
+            "are kept; the rest are English and are transcribed by Whisper, which is better at English.",
     ),
     WHISPER(
         "Whisper only",
