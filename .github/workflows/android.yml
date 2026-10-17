@@ -43,6 +43,10 @@ jobs:
           id=$(gh api repos/k2-fsa/sherpa-onnx/releases/tags/asr-models -q .id)
           gh api --paginate "repos/k2-fsa/sherpa-onnx/releases/$id/assets?per_page=100" -q '.[] | "\(.size) \(.name)"' \
             | grep -iE 'omnilingual|indic|malayalam|[-_.]ml[-_.]|whisper-(medium|large|turbo)|qwen3|cohere' || true
+          echo "== Pinned IndicConformer ML files"
+          curl -s "https://huggingface.co/api/models/csndhanasekar/sherpa-onnx-indicconformer-ml-int8?blobs=true" \
+            | jq -r '"revision=\(.sha)", (.siblings[] | "  \(.rfilename) size=\(.size) sha256=\(.lfs.sha256 // "n/a")")' || true
+          curl -sL "https://huggingface.co/csndhanasekar/sherpa-onnx-indicconformer-ml-int8/resolve/main/tokens.txt" | sha256sum || true
           for m in csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05 \
                    ai4bharat/indicconformer_stt_ml_hybrid_ctc_rnnt_large ai4bharat/indic-conformer-600m-multilingual \
                    OpenVoiceOS/ai4bharat-indicconformer-ml-onnx csndhanasekar/sherpa-onnx-indicconformer-ml-int8 \
