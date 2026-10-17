@@ -9,21 +9,18 @@ import sys
 import tarfile
 import time
 import unicodedata
-import wave
-
 import numpy as np
 import sherpa_onnx
+import soundfile as sf
 
 N = int(os.environ.get("N_UTTS", "40"))
 root = sys.argv[1]
 
 
 def read_wav(path):
-    with wave.open(path) as f:
-        assert f.getnchannels() == 1 and f.getsampwidth() == 2, path
-        sr = f.getframerate()
-        x = np.frombuffer(f.readframes(f.getnframes()), dtype=np.int16).astype(np.float32) / 32768
-    return x, sr
+    # FLEURS ships 32-bit float WAVs, which the stdlib wave module cannot read.
+    x, sr = sf.read(path, dtype="float32", always_2d=True)
+    return np.ascontiguousarray(x.mean(axis=1)), sr
 
 
 def norm(s):
