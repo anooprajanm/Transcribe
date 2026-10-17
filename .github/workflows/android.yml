@@ -1,0 +1,56 @@
+name: Android build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Fetch sherpa-onnx native libraries
+        run: ./scripts/fetch-native-libs.sh
+
+      - name: Check model download URLs used by the app
+        run: |
+          set -e
+          grep -o 'GH/[^"]*' app/src/main/java/com/anooprajan/transcribe/models/ModelCatalog.kt \
+            | sed 's#^GH#https://github.com/k2-fsa/sherpa-onnx/releases/download#' \
+            | while read -r url; do
+                code=$(curl -s -o /dev/null -w '%{http_code}' -IL "$url")
+                echo "$code $url"
+                [ "$code" = "200" ] || { echo "::error::Model URL not reachable: $url"; exit 1; }
+              done
+
+      - name: Unit tests and debug APK
+        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: transcribe-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Publish rolling dev build
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="dev-${GITHUB_REF_NAME//\//-}"
+          cp app/build/outputs/apk/debug/app-debug.apk transcribe-debug.apk
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" transcribe-debug.apk --prerelease --target "$GITHUB_SHA" \
+            --title "Dev build ($GITHUB_REF_NAME)" \
+            --notes "Debug build of ${GITHUB_SHA::7}. Install on the phone; updates install over the previous build."
