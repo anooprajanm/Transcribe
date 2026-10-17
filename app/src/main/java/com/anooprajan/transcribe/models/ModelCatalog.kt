@@ -9,12 +9,21 @@ import java.io.File
 data class ModelSpec(
     val id: String,
     val title: String,
+    /** Archive or single file. Empty when [files] lists the files individually. */
     val url: String,
     /** Approximate size on disk after extraction. */
     val diskMb: Int,
     val isArchive: Boolean,
     val keep: (String) -> Boolean = { true },
+    val files: List<RemoteFile> = emptyList(),
+    val engine: Engine = Engine.OTHER,
 )
+
+/** A file downloaded as-is, verified against [sha256] when given. */
+data class RemoteFile(val url: String, val name: String, val sha256: String? = null)
+
+/** Which sherpa-onnx model family a CTC model belongs to. */
+enum class Engine { OTHER, OMNILINGUAL, NEMO_CTC }
 
 /** Resolved file paths for a Whisper-style encoder/decoder model. */
 data class WhisperFiles(val encoder: String, val decoder: String, val tokens: String)
@@ -83,6 +92,7 @@ object ModelCatalog {
         diskMb = 350,
         isArchive = true,
         keep = int8TokensOrWeights,
+        engine = Engine.OMNILINGUAL,
     )
 
     val OMNILINGUAL_1B = ModelSpec(
@@ -92,10 +102,30 @@ object ModelCatalog {
         diskMb = 1050,
         isArchive = true,
         keep = int8TokensOrWeights,
+        engine = Engine.OMNILINGUAL,
+    )
+
+    // AI4Bharat IndicConformer (Malayalam, MIT), trained on conversational Indian speech.
+    // Community sherpa-onnx export, pinned by checksum. In CI it scored 3.0% CER on FLEURS
+    // Malayalam vs 5.2% for Omnilingual 300M and ran 2.5x faster (scripts/eval_malayalam.py).
+    private const val INDIC_ML_REPO =
+        "https://huggingface.co/csndhanasekar/sherpa-onnx-indicconformer-ml-int8/resolve/main"
+
+    val INDIC_ML = ModelSpec(
+        id = "indicconformer-ml",
+        title = "IndicConformer Malayalam (most accurate, fastest)",
+        url = "",
+        diskMb = 135,
+        isArchive = false,
+        files = listOf(
+            RemoteFile("$INDIC_ML_REPO/model.int8.onnx", "model.int8.onnx"),
+            RemoteFile("$INDIC_ML_REPO/tokens.txt", "tokens.txt"),
+        ),
+        engine = Engine.NEMO_CTC,
     )
 
     val whisperModels = listOf(WHISPER_SMALL, WHISPER_MEDIUM, WHISPER_TURBO)
-    val malayalamModels = listOf(OMNILINGUAL_300M, OMNILINGUAL_1B)
+    val malayalamModels = listOf(INDIC_ML, OMNILINGUAL_1B, OMNILINGUAL_300M)
     val all = listOf(SEGMENTATION, EMBEDDING) + whisperModels + malayalamModels
 
     fun segmentationModel(dir: File): String =

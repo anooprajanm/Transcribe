@@ -12,8 +12,8 @@ android {
         applicationId = "com.anooprajan.transcribe"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.1.3"
+        versionCode = 5
+        versionName = "0.2.0"
         ndk {
             // Phones only; the native libs are fetched for arm64-v8a.
             abiFilters += listOf("arm64-v8a")

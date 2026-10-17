@@ -8,6 +8,8 @@ import java.io.File
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.DigestInputStream
+import java.security.MessageDigest
 
 class ModelManager(context: Context) {
     private val root = File(context.filesDir, "models")
@@ -36,6 +38,47 @@ class ModelManager(context: Context) {
         staging.deleteRecursively()
         staging.mkdirs()
 
+        if (spec.files.isNotEmpty()) {
+            downloadFiles(spec, staging, onProgress)
+        } else {
+            downloadUrl(spec, staging, onProgress)
+        }
+
+        require(staging.walkTopDown().any { it.isFile }) { "Nothing was downloaded for ${spec.id}" }
+        File(staging, MARKER).writeText(spec.url.ifEmpty { spec.files.joinToString { it.url } })
+        target.deleteRecursively()
+        check(staging.renameTo(target)) { "Could not move model into place" }
+    }
+
+    private fun downloadFiles(spec: ModelSpec, staging: File, onProgress: (Long, Long) -> Unit) {
+        var done = 0L
+        for (f in spec.files) {
+            val conn = openFollowingRedirects(f.url)
+            try {
+                val total = conn.contentLengthLong
+                val base = done
+                val digest = MessageDigest.getInstance("SHA-256")
+                val input = DigestInputStream(
+                    CountingInputStream(BufferedInputStream(conn.inputStream, 1 shl 16)) {
+                        // Progress is per file; good enough for one large file plus small extras.
+                        onProgress(base + it, if (total > 0) base + total else -1)
+                    },
+                    digest,
+                )
+                input.use { File(staging, f.name).outputStream().use { out -> it.copyTo(out, 1 shl 16) } }
+                done += File(staging, f.name).length()
+                val actual = digest.digest().joinToString("") { "%02x".format(it) }
+                if (f.sha256 != null && !actual.equals(f.sha256, ignoreCase = true)) {
+                    staging.deleteRecursively()
+                    error("Checksum mismatch for ${f.name}: the published model changed. Update the app.")
+                }
+            } finally {
+                conn.disconnect()
+            }
+        }
+    }
+
+    private fun downloadUrl(spec: ModelSpec, staging: File, onProgress: (Long, Long) -> Unit) {
         val conn = openFollowingRedirects(spec.url)
         try {
             val total = conn.contentLengthLong
@@ -53,11 +96,6 @@ class ModelManager(context: Context) {
         } finally {
             conn.disconnect()
         }
-
-        require(staging.walkTopDown().any { it.isFile }) { "Nothing was extracted from ${spec.url}" }
-        File(staging, MARKER).writeText(spec.url)
-        target.deleteRecursively()
-        check(staging.renameTo(target)) { "Could not move model into place" }
     }
 
     private fun extractTarBz2(input: InputStream, dest: File, keep: (String) -> Boolean) {

@@ -8,16 +8,16 @@ import com.anooprajan.transcribe.models.ModelSpec
 enum class AsrMode(val title: String, val description: String) {
     HYBRID(
         "Hybrid (recommended)",
-        "Each turn goes through Omnilingual ASR first. Turns that come out in Malayalam script " +
-            "are kept; the rest are English and are transcribed by Whisper, which is better at English.",
+        "Omnilingual ASR detects whether each turn is Malayalam or English. Malayalam turns are " +
+            "transcribed by the Malayalam model below, English turns by Whisper.",
     ),
     WHISPER(
         "Whisper only",
         "Whisper with per-turn language detection. Good English, weak Malayalam.",
     ),
     OMNILINGUAL(
-        "Omnilingual only",
-        "Meta Omnilingual ASR (1600 languages) for every turn. No punctuation or casing.",
+        "Malayalam model only",
+        "Every turn goes to the Malayalam model below. English words come out in Malayalam script.",
     ),
 }
 
@@ -34,7 +34,7 @@ class Settings(context: Context) {
         set(v) = prefs.edit().putString("whisperModelId", v).apply()
 
     var malayalamModelId: String
-        get() = prefs.getString("malayalamModelId", ModelCatalog.OMNILINGUAL_300M.id)!!
+        get() = prefs.getString("malayalamModelId", ModelCatalog.INDIC_ML.id)!!
         set(v) = prefs.edit().putString("malayalamModelId", v).apply()
 
     /** 0 = estimate automatically. */
@@ -57,15 +57,17 @@ class Settings(context: Context) {
 
     val malayalamModel: ModelSpec
         get() = ModelCatalog.malayalamModels.firstOrNull { it.id == malayalamModelId }
-            ?: ModelCatalog.OMNILINGUAL_300M
+            ?: ModelCatalog.INDIC_ML
 
     /** Models the current settings need before a recording can be processed. */
     fun requiredModels(): List<ModelSpec> = buildList {
         add(ModelCatalog.SEGMENTATION)
         add(ModelCatalog.EMBEDDING)
         if (asrMode != AsrMode.OMNILINGUAL) add(whisperModel)
+        // Omnilingual 300M is the Malayalam/English router in hybrid mode.
+        if (asrMode == AsrMode.HYBRID) add(ModelCatalog.OMNILINGUAL_300M)
         if (asrMode != AsrMode.WHISPER) add(malayalamModel)
-    }
+    }.distinct()
 
     private fun defaultThreads(): Int =
         (Runtime.getRuntime().availableProcessors() / 2).coerceIn(2, 4)

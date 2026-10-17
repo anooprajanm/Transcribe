@@ -6,10 +6,13 @@ import com.anooprajan.transcribe.data.Settings
 import com.anooprajan.transcribe.data.Transcript
 import com.anooprajan.transcribe.data.TranscriptSegment
 import com.anooprajan.transcribe.models.ModelCatalog
+import com.anooprajan.transcribe.models.Engine
 import com.anooprajan.transcribe.models.ModelManager
+import com.anooprajan.transcribe.models.ModelSpec
 import com.k2fsa.sherpa.onnx.FastClusteringConfig
 import com.k2fsa.sherpa.onnx.FeatureConfig
 import com.k2fsa.sherpa.onnx.OfflineModelConfig
+import com.k2fsa.sherpa.onnx.OfflineNemoEncDecCtcModelConfig
 import com.k2fsa.sherpa.onnx.OfflineOmnilingualAsrCtcModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
@@ -56,7 +59,15 @@ class TranscriptionPipeline(
         } else {
             null
         }
-        val omni = if (mode != AsrMode.WHISPER) createOmnilingual(threads) else null
+        val mlSpec = settings.malayalamModel
+        // Router: Omnilingual writes each language in its own script, which tells Malayalam from
+        // English far more reliably than Whisper's language ID.
+        val router = if (mode == AsrMode.HYBRID) createCtc(ModelCatalog.OMNILINGUAL_300M, threads) else null
+        val malayalam = when {
+            mode == AsrMode.WHISPER -> null
+            router != null && mlSpec == ModelCatalog.OMNILINGUAL_300M -> router
+            else -> createCtc(mlSpec, threads)
+        }
         try {
             val out = ArrayList<TranscriptSegment>(turns.size)
             turns.forEachIndexed { i, turn ->
@@ -64,20 +75,19 @@ class TranscriptionPipeline(
                 val chunk = slice(samples, turn)
                 val seg = when (mode) {
                     AsrMode.OMNILINGUAL -> TranscriptSegment(
-                        turn.start, turn.end, turn.speaker, "", "omnilingual", decode(omni!!, chunk).text,
+                        turn.start, turn.end, turn.speaker, "ml", mlSpec.id, decode(malayalam!!, chunk).text,
                     )
                     AsrMode.WHISPER -> {
                         val r = decode(whisper!!, chunk)
                         TranscriptSegment(turn.start, turn.end, turn.speaker, r.lang, "whisper", r.text)
                     }
                     AsrMode.HYBRID -> {
-                        // Omnilingual writes each language in its own script, so the script of its
-                        // output is a more reliable Malayalam/English router than Whisper's language
-                        // ID, which often tags Malayalam as Urdu/Tamil or as English (and then
-                        // "transcribes" it as an invented English sentence).
-                        val o = decode(omni!!, chunk)
+                        // Whisper's language ID often tags Malayalam as Urdu/Tamil, or as English and
+                        // then invents an English sentence; route by the router's output script instead.
+                        val o = decode(router!!, chunk)
                         if (malayalamRatio(o.text) >= 0.4f) {
-                            TranscriptSegment(turn.start, turn.end, turn.speaker, "ml", "omnilingual", o.text)
+                            val text = if (malayalam === router) o.text else decode(malayalam!!, chunk).text
+                            TranscriptSegment(turn.start, turn.end, turn.speaker, "ml", mlSpec.id, text)
                         } else {
                             val w = decode(whisper!!, chunk)
                             TranscriptSegment(turn.start, turn.end, turn.speaker, "en", "whisper", w.text)
@@ -90,7 +100,8 @@ class TranscriptionPipeline(
             return Transcript(out)
         } finally {
             whisper?.release()
-            omni?.release()
+            router?.release()
+            if (malayalam !== router) malayalam?.release()
         }
     }
 
@@ -156,16 +167,24 @@ class TranscriptionPipeline(
         )
     }
 
-    private fun createOmnilingual(threads: Int): OfflineRecognizer {
-        val files = ModelCatalog.ctcFiles(models.dir(settings.malayalamModel))
+    private fun createCtc(spec: ModelSpec, threads: Int): OfflineRecognizer {
+        val files = ModelCatalog.ctcFiles(models.dir(spec))
+        val modelConfig = when (spec.engine) {
+            Engine.NEMO_CTC -> OfflineModelConfig(
+                nemo = OfflineNemoEncDecCtcModelConfig(model = files.model),
+                tokens = files.tokens,
+                numThreads = threads,
+            )
+            else -> OfflineModelConfig(
+                omnilingual = OfflineOmnilingualAsrCtcModelConfig(model = files.model),
+                tokens = files.tokens,
+                numThreads = threads,
+            )
+        }
         return OfflineRecognizer(
             config = OfflineRecognizerConfig(
                 featConfig = FeatureConfig(sampleRate = Wav.SAMPLE_RATE, featureDim = 80),
-                modelConfig = OfflineModelConfig(
-                    omnilingual = OfflineOmnilingualAsrCtcModelConfig(model = files.model),
-                    tokens = files.tokens,
-                    numThreads = threads,
-                ),
+                modelConfig = modelConfig,
             ),
         )
     }
