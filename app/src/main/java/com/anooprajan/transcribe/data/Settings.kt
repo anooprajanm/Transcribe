@@ -33,6 +33,10 @@ class Settings(context: Context) {
         get() = prefs.getString("whisperModelId", ModelCatalog.WHISPER_SMALL.id)!!
         set(v) = prefs.edit().putString("whisperModelId", v).apply()
 
+    var malayalamModelId: String
+        get() = prefs.getString("malayalamModelId", ModelCatalog.OMNILINGUAL_300M.id)!!
+        set(v) = prefs.edit().putString("malayalamModelId", v).apply()
+
     /** 0 = estimate automatically. */
     var numSpeakers: Int
         get() = prefs.getInt("numSpeakers", 0)
@@ -51,12 +55,16 @@ class Settings(context: Context) {
         get() = ModelCatalog.whisperModels.firstOrNull { it.id == whisperModelId }
             ?: ModelCatalog.WHISPER_SMALL
 
+    val malayalamModel: ModelSpec
+        get() = ModelCatalog.malayalamModels.firstOrNull { it.id == malayalamModelId }
+            ?: ModelCatalog.OMNILINGUAL_300M
+
     /** Models the current settings need before a recording can be processed. */
     fun requiredModels(): List<ModelSpec> = buildList {
         add(ModelCatalog.SEGMENTATION)
         add(ModelCatalog.EMBEDDING)
         if (asrMode != AsrMode.OMNILINGUAL) add(whisperModel)
-        if (asrMode != AsrMode.WHISPER) add(ModelCatalog.OMNILINGUAL)
+        if (asrMode != AsrMode.WHISPER) add(malayalamModel)
     }
 
     private fun defaultThreads(): Int =

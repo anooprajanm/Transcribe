@@ -157,7 +157,7 @@ class TranscriptionPipeline(
     }
 
     private fun createOmnilingual(threads: Int): OfflineRecognizer {
-        val files = ModelCatalog.ctcFiles(models.dir(ModelCatalog.OMNILINGUAL))
+        val files = ModelCatalog.ctcFiles(models.dir(settings.malayalamModel))
         return OfflineRecognizer(
             config = OfflineRecognizerConfig(
                 featConfig = FeatureConfig(sampleRate = Wav.SAMPLE_RATE, featureDim = 80),

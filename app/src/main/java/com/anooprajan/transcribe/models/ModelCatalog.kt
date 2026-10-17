@@ -28,6 +28,10 @@ object ModelCatalog {
     private val int8OrTokens: (String) -> Boolean =
         { it.endsWith(".int8.onnx") || it.endsWith("tokens.txt") }
 
+    // Larger models may keep weights in an external data file next to the .onnx.
+    private val int8TokensOrWeights: (String) -> Boolean =
+        { int8OrTokens(it) || it.endsWith(".weights") || it.endsWith(".data") }
+
     val SEGMENTATION = ModelSpec(
         id = "pyannote-seg-3.0",
         title = "Speaker segmentation (pyannote 3.0)",
@@ -72,17 +76,27 @@ object ModelCatalog {
         keep = int8OrTokens,
     )
 
-    val OMNILINGUAL = ModelSpec(
-        id = "omnilingual-300m",
-        title = "Omnilingual ASR 300M (Malayalam + 1600 languages)",
-        url = "$GH/asr-models/sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-int8-2025-11-12.tar.bz2",
+    val OMNILINGUAL_300M = ModelSpec(
+        id = "omnilingual-300m-v2",
+        title = "Omnilingual ASR 300M v2 (fast)",
+        url = "$GH/asr-models/sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-v2-int8-2026-02-05.tar.bz2",
         diskMb = 350,
         isArchive = true,
-        keep = int8OrTokens,
+        keep = int8TokensOrWeights,
+    )
+
+    val OMNILINGUAL_1B = ModelSpec(
+        id = "omnilingual-1b-v2",
+        title = "Omnilingual ASR 1B v2 (more accurate Malayalam, ~3x slower)",
+        url = "$GH/asr-models/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05.tar.bz2",
+        diskMb = 1050,
+        isArchive = true,
+        keep = int8TokensOrWeights,
     )
 
     val whisperModels = listOf(WHISPER_SMALL, WHISPER_MEDIUM, WHISPER_TURBO)
-    val all = listOf(SEGMENTATION, EMBEDDING, WHISPER_SMALL, WHISPER_MEDIUM, WHISPER_TURBO, OMNILINGUAL)
+    val malayalamModels = listOf(OMNILINGUAL_300M, OMNILINGUAL_1B)
+    val all = listOf(SEGMENTATION, EMBEDDING) + whisperModels + malayalamModels
 
     fun segmentationModel(dir: File): String =
         dir.findFile { it.name == "model.onnx" }

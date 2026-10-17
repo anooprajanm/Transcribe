@@ -20,6 +20,12 @@ class ModelManager(context: Context) {
         dir(spec).deleteRecursively()
     }
 
+    /** Removes models dropped from the catalog and leftover partial downloads. Call at process start. */
+    fun pruneUnknown() {
+        val known = ModelCatalog.all.map { it.id }.toSet()
+        root.listFiles()?.filter { it.name !in known }?.forEach { it.deleteRecursively() }
+    }
+
     /**
      * Downloads [spec] into its model directory. Reports progress as downloaded/total bytes
      * (total is -1 when the server does not send a length). Safe to call again after a failure.

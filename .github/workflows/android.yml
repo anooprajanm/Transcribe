@@ -43,6 +43,14 @@ jobs:
           id=$(gh api repos/k2-fsa/sherpa-onnx/releases/tags/asr-models -q .id)
           gh api --paginate "repos/k2-fsa/sherpa-onnx/releases/$id/assets?per_page=100" -q '.[] | "\(.size) \(.name)"' \
             | grep -iE 'omnilingual|indic|malayalam|[-_.]ml[-_.]|whisper-(medium|large|turbo)|qwen3|cohere' || true
+          for m in csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05 \
+                   ai4bharat/indicconformer_stt_ml_hybrid_ctc_rnnt_large ai4bharat/indic-conformer-600m-multilingual \
+                   OpenVoiceOS/ai4bharat-indicconformer-ml-onnx csndhanasekar/sherpa-onnx-indicconformer-ml-int8 \
+                   jeswinjestin/sherpa-onnx-nemo-ctc-indicconformer-malayalam; do
+            echo "== HF files: $m"
+            curl -s "https://huggingface.co/api/models/$m?blobs=true" \
+              | jq -r '"gated=\(.gated) license=\(.cardData.license // "?")", (.siblings[]? | "  \(.size // "?") \(.rfilename)")' || true
+          done
           for q in "sherpa-onnx%20indic" "sherpa-onnx%20malayalam" "sherpa-onnx%20omnilingual" "indicconformer" "whisper%20malayalam"; do
             echo "== HF search: $q"
             curl -s "https://huggingface.co/api/models?search=$q&limit=30&sort=downloads" | jq -r '.[] | "\(.downloads) \(.id)"' || true

@@ -63,6 +63,7 @@ fun SettingsScreen(onBack: () -> Unit) {
 
     var mode by remember { mutableStateOf(settings.asrMode) }
     var whisperId by remember { mutableStateOf(settings.whisperModelId) }
+    var malayalamId by remember { mutableStateOf(settings.malayalamModelId) }
     var speakers by remember { mutableIntStateOf(settings.numSpeakers) }
     var threshold by remember { mutableStateOf(settings.clusterThreshold) }
     var threads by remember { mutableIntStateOf(settings.numThreads) }
@@ -72,7 +73,7 @@ fun SettingsScreen(onBack: () -> Unit) {
 
     val modelJob = jobs[ProcessingState.MODELS]
     val installed = remember(modelJob, revision) { ModelCatalog.all.associate { it.id to models.isInstalled(it) } }
-    val required = remember(mode, whisperId, modelJob, revision) { settings.requiredModels() }
+    val required = remember(mode, whisperId, malayalamId, modelJob, revision) { settings.requiredModels() }
     val missing = required.filter { installed[it.id] != true }
     val llmInstalled = remember(revision) { ActionItemExtractor.modelFile(context).exists() }
 
@@ -116,6 +117,15 @@ fun SettingsScreen(onBack: () -> Unit) {
                 Choice(m.title, m.description, selected = mode == m) {
                     mode = m
                     settings.asrMode = m
+                }
+            }
+            if (mode != AsrMode.WHISPER) {
+                item { Header("Malayalam model") }
+                items(ModelCatalog.malayalamModels) { spec ->
+                    Choice(spec.title, "~${spec.diskMb} MB on disk", selected = malayalamId == spec.id) {
+                        malayalamId = spec.id
+                        settings.malayalamModelId = spec.id
+                    }
                 }
             }
             if (mode != AsrMode.OMNILINGUAL) {
